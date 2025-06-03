@@ -3,7 +3,6 @@ import requests
 from bs4 import BeautifulSoup
 from urllib.parse import quote_plus
 import pandas as pd
-import io
 
 # -------------------------------
 # Page configuration
@@ -14,7 +13,7 @@ st.title("🔍 Keyword Rank Checker")
 # -------------------------------
 # Country dropdown selector
 # -------------------------------
-country = st.selectbox("🌎 Select Country", [
+country = st.selectbox("🌍 Select Country", [
     "India", "United States", "United Kingdom", "Canada", "Australia"
 ])
 
@@ -31,7 +30,7 @@ selected_google_domain = google_domains[country]
 # -------------------------------
 # Input: Website URL
 # -------------------------------
-website = st.text_input("🔗 Enter Your Website (e.g., example.com)", "")
+website = st.text_input("🔗 Enter Your Website (e.g., example.com)", "").strip().lower()
 
 # -------------------------------
 # Input Option 1: Text area
@@ -77,21 +76,24 @@ if st.button("Check Rankings"):
             url = f"https://www.{selected_google_domain}/search?q={encoded_kw}&num=100"
 
             headers = {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                              "(KHTML, like Gecko) Chrome/113.0.0.0 Safari/537.36"
+                "User-Agent": (
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/113.0.0.0 Safari/537.36"
+                )
             }
 
             rank = "NR"
             try:
                 response = requests.get(url, headers=headers, timeout=10)
                 soup = BeautifulSoup(response.text, "html.parser")
-    
-                # Use updated selector for result links
+
+                # Use the updated, robust selector for result links
                 results_blocks = soup.select("div.yuRUbf > a")
 
                 for idx, link in enumerate(results_blocks, start=1):
                     href = link.get("href")
-                    if href and website.lower() in href.lower():
+                    if href and website in href.lower():
                         rank = idx
                         break
             except Exception as e:
