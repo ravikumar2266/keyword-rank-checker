@@ -1,48 +1,47 @@
 import streamlit as st
-import requests
-from bs4 import BeautifulSoup
-from urllib.parse import quote_plus
 import pandas as pd
+import httpx
+from parsel import Selector
+from urllib.parse import quote_plus
 import time
 
 st.set_page_config(page_title="Keyword Rank Checker", layout="wide")
-st.title("🔍 Free Keyword Rank Checker (Google Top 100)")
+st.title("🔍 Free Google Keyword Rank Checker")
 
-# Country selection
+# Country selector
 country = st.selectbox("🌍 Select Google Country", [
     "India", "United States", "United Kingdom", "Canada", "Australia"
 ])
-google_domains = {
+domain_map = {
     "India": "google.co.in",
     "United States": "google.com",
     "United Kingdom": "google.co.uk",
     "Canada": "google.ca",
     "Australia": "google.com.au"
 }
-selected_google_domain = google_domains[country]
+google_domain = domain_map[country]
 
-# Website input
-website = st.text_input("🔗 Enter Your Website (e.g., example.com)").lower().strip()
+# Input website
+website = st.text_input("🔗 Enter your website (e.g. example.com)").lower().strip()
 
-# Keyword input
-keywords_text = st.text_area("📝 Enter Keywords (one per line)")
-uploaded_file = st.file_uploader("📂 Or Upload a CSV File (with 'keyword' column)", type="csv")
-
-# Prepare keywords
+# Keyword entry
 keywords = []
-if uploaded_file:
+keywords_text = st.text_area("📝 Enter keywords (one per line)")
+csv_file = st.file_uploader("📂 Or upload CSV with 'keyword' column", type='csv')
+
+if csv_file:
     try:
-        df = pd.read_csv(uploaded_file)
+        df = pd.read_csv(csv_file)
         if 'keyword' in df.columns:
             keywords = df['keyword'].dropna().astype(str).tolist()
         else:
-            st.error("CSV must have a 'keyword' column.")
+            st.error("CSV must contain a 'keyword' column.")
     except Exception as e:
-        st.error(f"Error reading CSV: {e}")
-elif keywords_text.strip():
-    keywords = [kw.strip() for kw in keywords_text.split('\n') if kw.strip()]
+        st.error(f"Could not read file: {e}")
+elif keywords_text:
+    keywords = [k.strip() for k in keywords_text.strip().split("\n") if k.strip()]
 
-# Search function
+# Scraper using parsel and httpx
 def get_rank(keyword, website, domain):
     search_url = f"https://www.{domain}/search?q={quote_plus(keyword)}&num=100"
     headers = {
@@ -53,45 +52,36 @@ def get_rank(keyword, website, domain):
         )
     }
     try:
-        response = requests.get(search_url, headers=headers, timeout=10)
-        soup = BeautifulSoup(response.text, "html.parser")
-        results = soup.select("div.yuRUbf > a")
+        resp = httpx.get(search_url, headers=headers, timeout=10)
+        sel = Selector(text=resp.text)
+        links = sel.xpath('//div[@class="yuRUbf"]/a/@href').getall()
 
-        for i, tag in enumerate(results, start=1):
-            href = tag.get("href")
-            if href and website in href:
+        for i, link in enumerate(links, start=1):
+            if website in link.lower():
                 return i
         return "NR"
-    except:
+    except Exception as e:
         return "Error"
 
-# Button to trigger ranking check
-if st.button("🔎 Check Rankings"):
+# Main action button
+if st.button("🚀 Start Checking"):
     if not website or not keywords:
-        st.warning("⚠️ Please enter both website and keywords.")
+        st.warning("Please enter both website and keywords.")
     else:
-        progress_bar = st.progress(0)
-        status = st.empty()
         results = []
+        progress = st.progress(0)
+        status = st.empty()
 
-        for i, keyword in enumerate(keywords):
-            rank = get_rank(keyword, website, selected_google_domain)
-            results.append({"Keyword": keyword, "Rank": rank})
+        for i, kw in enumerate(keywords):
+            status.text(f"Checking: {kw} ({i+1}/{len(keywords)})")
+            rank = get_rank(kw, website, google_domain)
+            results.append({"Keyword": kw, "Rank": rank})
+            progress.progress((i + 1) / len(keywords))
+            time.sleep(5)  # Delay between requests
 
-            progress_bar.progress((i + 1) / len(keywords))
-            status.text(f"Processed {i + 1} of {len(keywords)} keywords")
+        df_result = pd.DataFrame(results)
+        st.success("✅ All done!")
+        st.dataframe(df_result)
 
-            time.sleep(5)  # ⏱️ Add delay to avoid getting blocked
-
-        st.success("✅ Done! See the results below.")
-        df_results = pd.DataFrame(results)
-        st.dataframe(df_results, use_container_width=True)
-
-        # Export to CSV
-        csv = df_results.to_csv(index=False).encode('utf-8')
-        st.download_button(
-            label="📥 Download Results as CSV",
-            data=csv,
-            file_name="rank_results.csv",
-            mime="text/csv"
-        )
+        csv_export = df_result.to_csv(index=False).encode("utf-8")
+        st.download_button("📥 Download Results as CSV", csv_export, "rank_results.csv", "text/csv")
