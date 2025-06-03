@@ -1,5 +1,3 @@
-<details>
-<summary>Click to expand full code</summary>
 import streamlit as st
 import requests
 from bs4 import BeautifulSoup
@@ -90,4 +88,3 @@ if st.button("Check Rankings") and website and keywords:
         )
 elif st.button("Check Rankings"):
     st.warning("Please enter your website and at least one keyword.")
-    </details>
