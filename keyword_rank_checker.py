@@ -85,11 +85,13 @@ if st.button("Check Rankings"):
             try:
                 response = requests.get(url, headers=headers, timeout=10)
                 soup = BeautifulSoup(response.text, "html.parser")
-                results_blocks = soup.find_all("div", class_="g")
+    
+                # Use updated selector for result links
+                results_blocks = soup.select("div.yuRUbf > a")
 
-                for idx, block in enumerate(results_blocks, start=1):
-                    link = block.find("a")
-                    if link and website.lower() in link["href"].lower():
+                for idx, link in enumerate(results_blocks, start=1):
+                    href = link.get("href")
+                    if href and website.lower() in href.lower():
                         rank = idx
                         break
             except Exception as e:
