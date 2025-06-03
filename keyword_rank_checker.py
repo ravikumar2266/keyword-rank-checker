@@ -72,7 +72,9 @@ if uploaded_file:
 elif keyword_input:
     keywords = keyword_input.strip().splitlines()
 
-if st.button("Check Rankings") and website and keywords:
+check_button = st.button("Check Rankings")
+
+if check_button and website and keywords:
     with st.spinner("Checking rankings..."):
         results_df = process_keywords(keywords, website)
         st.success("Done!")
@@ -86,5 +88,5 @@ if st.button("Check Rankings") and website and keywords:
             file_name="keyword_rankings.csv",
             mime="text/csv"
         )
-elif st.button("Check Rankings"):
+elif check_button:
     st.warning("Please enter your website and at least one keyword.")
