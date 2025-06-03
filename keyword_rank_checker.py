@@ -3,20 +3,15 @@ import requests
 from bs4 import BeautifulSoup
 from urllib.parse import quote_plus
 import pandas as pd
+import time
 
-# -------------------------------
-# Page configuration
-# -------------------------------
 st.set_page_config(page_title="Keyword Rank Checker", layout="wide")
-st.title("🔍 Keyword Rank Checker")
+st.title("🔍 Free Keyword Rank Checker (Google Top 100)")
 
-# -------------------------------
-# Country dropdown selector
-# -------------------------------
-country = st.selectbox("🌍 Select Country", [
+# Country selection
+country = st.selectbox("🌍 Select Google Country", [
     "India", "United States", "United Kingdom", "Canada", "Australia"
 ])
-
 google_domains = {
     "India": "google.co.in",
     "United States": "google.com",
@@ -24,98 +19,79 @@ google_domains = {
     "Canada": "google.ca",
     "Australia": "google.com.au"
 }
-
 selected_google_domain = google_domains[country]
 
-# -------------------------------
-# Input: Website URL
-# -------------------------------
-website = st.text_input("🔗 Enter Your Website (e.g., example.com)", "").strip().lower()
+# Website input
+website = st.text_input("🔗 Enter Your Website (e.g., example.com)").lower().strip()
 
-# -------------------------------
-# Input Option 1: Text area
-# -------------------------------
-keywords_text = st.text_area("📝 Enter Keywords (one per line)", "")
+# Keyword input
+keywords_text = st.text_area("📝 Enter Keywords (one per line)")
+uploaded_file = st.file_uploader("📂 Or Upload a CSV File (with 'keyword' column)", type="csv")
 
-# -------------------------------
-# Input Option 2: CSV Upload
-# -------------------------------
-uploaded_file = st.file_uploader("📂 Or Upload CSV (Column: keyword)", type=["csv"])
-
-# -------------------------------
-# Prepare Keyword List
-# -------------------------------
+# Prepare keywords
 keywords = []
-
 if uploaded_file:
     try:
         df = pd.read_csv(uploaded_file)
         if 'keyword' in df.columns:
             keywords = df['keyword'].dropna().astype(str).tolist()
         else:
-            st.error("Uploaded CSV must have a 'keyword' column.")
+            st.error("CSV must have a 'keyword' column.")
     except Exception as e:
-        st.error(f"❌ Error reading CSV: {e}")
-
+        st.error(f"Error reading CSV: {e}")
 elif keywords_text.strip():
-    keywords = [kw.strip() for kw in keywords_text.strip().split('\n') if kw.strip()]
+    keywords = [kw.strip() for kw in keywords_text.split('\n') if kw.strip()]
 
-# -------------------------------
-# Start Search Button
-# -------------------------------
-if st.button("Check Rankings"):
+# Search function
+def get_rank(keyword, website, domain):
+    search_url = f"https://www.{domain}/search?q={quote_plus(keyword)}&num=100"
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/113.0.0.0 Safari/537.36"
+        )
+    }
+    try:
+        response = requests.get(search_url, headers=headers, timeout=10)
+        soup = BeautifulSoup(response.text, "html.parser")
+        results = soup.select("div.yuRUbf > a")
+
+        for i, tag in enumerate(results, start=1):
+            href = tag.get("href")
+            if href and website in href:
+                return i
+        return "NR"
+    except:
+        return "Error"
+
+# Button to trigger ranking check
+if st.button("🔎 Check Rankings"):
     if not website or not keywords:
-        st.warning("⚠️ Please enter your website and keywords (via text or CSV).")
+        st.warning("⚠️ Please enter both website and keywords.")
     else:
-        results = []
         progress_bar = st.progress(0)
-        status_text = st.empty()
+        status = st.empty()
+        results = []
 
         for i, keyword in enumerate(keywords):
-            encoded_kw = quote_plus(keyword)
-            url = f"https://www.{selected_google_domain}/search?q={encoded_kw}&num=100"
-
-            headers = {
-                "User-Agent": (
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                    "AppleWebKit/537.36 (KHTML, like Gecko) "
-                    "Chrome/113.0.0.0 Safari/537.36"
-                )
-            }
-
-            rank = "NR"
-            try:
-                response = requests.get(url, headers=headers, timeout=10)
-                soup = BeautifulSoup(response.text, "html.parser")
-
-                # Use the updated, robust selector for result links
-                results_blocks = soup.select("div.yuRUbf > a")
-
-                for idx, link in enumerate(results_blocks, start=1):
-                    href = link.get("href")
-                    if href and website in href.lower():
-                        rank = idx
-                        break
-            except Exception as e:
-                rank = "Error"
-
+            rank = get_rank(keyword, website, selected_google_domain)
             results.append({"Keyword": keyword, "Rank": rank})
+
             progress_bar.progress((i + 1) / len(keywords))
-            status_text.text(f"{i+1} of {len(keywords)} keywords checked")
+            status.text(f"Processed {i + 1} of {len(keywords)} keywords")
 
-        # Convert results to DataFrame
-        result_df = pd.DataFrame(results)
+            time.sleep(5)  # ⏱️ Add delay to avoid getting blocked
 
-        st.success("✅ Keyword Ranking Completed!")
-        st.dataframe(result_df, use_container_width=True)
+        st.success("✅ Done! See the results below.")
+        df_results = pd.DataFrame(results)
+        st.dataframe(df_results, use_container_width=True)
 
-        # -------------------------------
-        # Export Results Button
-        # -------------------------------
-        csv = result_df.to_csv(index=False).encode("utf-8")
+        # Export to CSV
+        csv = df_results.to_csv(index=False).encode('utf-8')
         st.download_button(
             label="📥 Download Results as CSV",
             data=csv,
-            file_name="keyword_rank_results.csv",
+            file_name="rank_results.csv",
             mime="text/csv"
         )
